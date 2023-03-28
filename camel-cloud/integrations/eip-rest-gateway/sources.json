@@ -1,0 +1,4 @@
+[ {
+  "content" : "beans {\n    enavSqlServer(org.apache.commons.dbcp2.BasicDataSource) {\n        driverClassName = 'com.microsoft.sqlserver.jdbc.SQLServerDriver'\n        url = 'jdbc:sqlserver://117.53.152.155;port=1433;database=VTS;Uid=sa;Pwd=Enav-DB123Sql456!!!;trustServerCertificate=true;'\n        username = 'sa'\n        password = 'Enav-DB123Sql456!!!'\n    }\n}",
+  "name" : "enav_sql_server.groovy"
+} ]

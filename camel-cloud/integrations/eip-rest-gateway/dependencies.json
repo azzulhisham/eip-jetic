@@ -1,0 +1,21 @@
+[ {
+  "maven" : "com.datagrate:messageHistory:0.21.0",
+  "version" : "0.21.0",
+  "artifactId" : "messageHistory",
+  "groupId" : "com.datagrate"
+}, {
+  "maven" : "org.apache.commons:commons-dbcp2:2.9.0",
+  "version" : "2.9.0",
+  "artifactId" : "commons-dbcp2",
+  "groupId" : "org.apache.commons"
+}, {
+  "maven" : "com.microsoft.sqlserver:mssql-jdbc:11.2.3.jre11",
+  "version" : "11.2.3.jre11",
+  "artifactId" : "mssql-jdbc",
+  "groupId" : "com.microsoft.sqlserver"
+}, {
+  "maven" : "org.json:org.json:chargebee-1.0",
+  "version" : "chargebee-1.0",
+  "artifactId" : "org.json",
+  "groupId" : "org.json"
+} ]

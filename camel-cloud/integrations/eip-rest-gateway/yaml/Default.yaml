@@ -1,0 +1,79 @@
+---
+apiVersion: "camel.apache.org/v1"
+kind: "Integration"
+metadata:
+  labels:
+    jetic.io/deployment.uuid: "4b5eaee8-86ca-43bf-a007-c82b997ac9e8"
+    jetic.io/integration.name: "eip-rest-gateway"
+    jetic.io/integration.revision: "91"
+    jetic.io/integration.uuid: "2159a225-aa1a-46e5-a385-ddb885a61e69"
+    jetic.io/integration.version: "1.0.0"
+    jetic.io/log.level: "INFO"
+    jetic.io/data.analyzer: "true"
+    jetic.io/profile.name: "Default"
+    jetic.io/profile.uuid: "8506c8fb-b626-4a13-9424-1d485fa9daa9"
+    jetic.io/open.api.host: "eip-rest-gw.pinc.my"
+  name: "eip-rest-gateway"
+spec:
+  configuration:
+  - type: "env"
+    value: "EIP-GW.JSON=2023-03-26T03:39:54.116"
+  - type: "property"
+    value: "quarkus.log.console.color=true"
+  - type: "property"
+    value: "quarkus.log.console.level=INFO"
+  dependencies:
+  - "mvn:com.datagrate:messageHistory:0.21.0"
+  - "mvn:com.microsoft.sqlserver:mssql-jdbc:11.2.3.jre11"
+  - "mvn:org.apache.commons:commons-dbcp2:2.9.0"
+  - "mvn:org.json:org.json:chargebee-1.0"
+  resources:
+  - content: "{\"openapi\":\"3.0.2\",\"info\":{\"title\":\"eip-gw\",\"version\":\"1.0.0\"},\"servers\":[{\"url\":\"/\"}],\"paths\":{\"/\":{\"get\":{\"responses\":{\"200\":{\"content\":{\"application/json\":{\"schema\":{\"type\":\"string\"}}},\"description\":\"default response description\"}},\"operationId\":\"default\"}},\"/ddms/getAllVessels\":{\"get\":{\"responses\":{\"200\":{\"content\":{\"application/json\":{\"schema\":{\"type\":\"string\"}}},\"description\":\"default response description\"}},\"operationId\":\"ddms\"}},\"/lrit/shipInfo/{imo}\":{\"get\":{\"responses\":{\"200\":{\"content\":{\"application/json\":{\"schema\":{\"type\":\"string\"}}},\"description\":\"default response description\"}},\"operationId\":\"lrit get ship info\"},\"parameters\":[{\"name\":\"imo\",\"description\":\"default path variable description\",\"schema\":{\"type\":\"string\"},\"in\":\"path\",\"required\":true}]},\"/lrit/shipPositions\":{\"get\":{\"responses\":{\"200\":{\"content\":{\"application/json\":{\"schema\":{\"type\":\"string\"}}},\"description\":\"default response description\"}},\"operationId\":\"lrit get ships position\"}},\"/mmdis/vessel/{imo}\":{\"get\":{\"responses\":{\"200\":{\"content\":{\"application/json\":{\"schema\":{\"type\":\"string\"}}},\"description\":\"default response description\"}},\"operationId\":\"mmdis get vessel\"},\"parameters\":[{\"name\":\"imo\",\"description\":\"default path variable description\",\"schema\":{\"type\":\"string\"},\"in\":\"path\",\"required\":true}]}},\"components\":{}}"
+    name: "eip-gw.json"
+    type: "openapi"
+  sources:
+  - compression: false
+    content: "//\n// To run this integration use:\n//\n// kamel run eip_rest_gateway.groovy\n//\n\n// camel-k: language=groovy\n// camel-k: name=eip-rest-gateway\n\n// import org.apache.camel.Message\nimport com.datagrate.messagehistory.DataAnalyzer\nimport java.io.BufferedReader;\nimport java.io.InputStreamReader;\nimport java.io.OutputStream;\nimport java.net.HttpURLConnection;\nimport java.net.URL;\nimport java.nio.charset.StandardCharsets;\nimport org.apache.camel.Exchange\nimport org.apache.camel.Processor\nimport org.apache.camel.model.dataformat.JsonLibrary\nimport org.json.JSONObject;\nimport org.json.XML;\n\n// activate JETIC.IO Data Analyzer\nDataAnalyzer.activate(getContext(), intercept(), onException(Throwable.class))\n\nfrom('direct://default').routeId('route-1')\n    .setBody().simple('This is a EIP Gateway for MMDIS, LRIT and DDMS.').id('setBody-00')\n\nfrom('direct://ddms').routeId('route-2')\n    .to('sql:SELECT sl.ShipListID, sl.IMO, sl.CallSign, sl.Name, sl.ShipType, sl.Dimension_A, sl.Dimension_B, sl.Dimension_C, sl.Dimension_D, sl.MaxDraught, sl.Destination, sl.ETA, sl.EquipTypeID, sl.ESN, sl.DNID, sl.MemberNumber, ddms.*  FROM [VTS].[dbo].[ShipList] sl INNER JOIN [VTS].[dbo].[Draught] ddms on ddms.MMSI = sl.MMSI?batch=false&dataSource=#enavSqlServer&useMessageBodyForSql=false').id('sql-00')\n    .marshal().json(JsonLibrary.Jackson).id('toJson-00')\n\nfrom('direct://lrit get ship info').routeId('route-3')\n    .setBody().simple('${header.imo}').id('setBody-01')\n    .process(new Processor() {\n        @Override\n        void process(Exchange exchange) throws Exception {\n            // Providing the website URL\n            URL url = new URL(\"http://lrit.com.my/ASPPositionWebServices/service.asmx\");\n        \n            // Creating an HTTP connection\n            HttpURLConnection MyConn = (HttpURLConnection) url.openConnection();\n            // Set the request method to \"GET\"\n            //MyConn.setRequestMethod(\"GET\");\n            MyConn.setRequestMethod(\"POST\");\n            MyConn.setDoOutput(true);\n            MyConn.setRequestProperty(\"Content-Type\",\"text/xml\");\n            MyConn.setRequestProperty(\"SOAPAction\", \"\\\"http://LRIT.svc/GetShipInfo\\\"\");\n            //MyConn.setRequestProperty(\"Authorization\", \"Basic \" + Base64.getEncoder().encodeToString((userName + \":\" + password).getBytes()));\n        \n            String imo = exchange.getIn().getBody(String.class);\n        \n            String payload = \"<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\" +\n                                                        \"<soap:Envelope xmlns:xsi=\\\"http://www.w3.org/2001/XMLSchema-instance\\\" xmlns:xsd=\\\"http://www.w3.org/2001/XMLSchema\\\" xmlns:soap=\\\"http://schemas.xmlsoap.org/soap/envelope/\\\">\" +\n                                                        \"<soap:Body>\" +\n                                                        \"<GetShipInfo xmlns=\\\"http://LRIT.svc/\\\">\" +\n                                                        \"<IMONumber>\" + imo + \"</IMONumber>\" +\n                                                        \"</GetShipInfo>\" +\n                                                        \"</soap:Body>\" +\n                                                        \"</soap:Envelope>\";\n        \n        \n            byte[] out = payload.getBytes(StandardCharsets.UTF_8);\n            OutputStream stream = MyConn.getOutputStream();\n            stream.write(out);\n        \n            int responseCode = MyConn.getResponseCode();\n            //System.out.println(\"GET Response Code :: \" + responseCode);\n        \n            if (responseCode == MyConn.HTTP_OK) {\n            \t// Create a reader with the input stream reader.\n            \tBufferedReader in = new BufferedReader(new InputStreamReader(\n            \t\tMyConn.getInputStream()));\n            \tString inputLine;\n        \n            \t// Create a string buffer\n            \tStringBuffer response = new StringBuffer();\n        \n            \t// Write each of the input line\n            \twhile ((inputLine = in.readLine()) != null) {\n            \t\tresponse.append(inputLine);\n            \t}\n            \tin.close();\n        \n            \tString xml = response.toString();\n        \n            \tbyte[] encoded = xml.getBytes();\n            \tJSONObject xmlJSONObj = XML.toJSONObject(new String(encoded));\n            \t//String json = xmlJSONObj.toString(4);\n        \n            \tJSONObject envelope = xmlJSONObj.getJSONObject(\"soap:Envelope\");\n            \tJSONObject body = envelope.getJSONObject(\"soap:Body\");\n        \n            \tJSONObject result = new JSONObject();\n            \tresult.put(\"Body\", body);\n        \n            \texchange.getIn().setBody(result.toString(4));\n        \n            } else {\n            \tSystem.out.println(\"Error found !!!\");\n            }\n        }\n    }).id('process-00')\n\nfrom('direct://lrit get ships position').routeId('route-4')\n    .process(new Processor() {\n        @Override\n        void process(Exchange exchange) throws Exception {\n            Object startDate = exchange.getIn().getHeader(\"startDate\");\n            Object endDate = exchange.getIn().getHeader(\"endDate\");\n        \n            URL url = new URL(\"http://lrit.com.my/ASPPositionWebServices/service.asmx\");\n        \n            // Creating an HTTP connection\n            HttpURLConnection MyConn = (HttpURLConnection) url.openConnection();\n            // Set the request method to \"GET\"\n            //MyConn.setRequestMethod(\"GET\");\n            MyConn.setRequestMethod(\"POST\");\n            MyConn.setDoOutput(true);\n            MyConn.setRequestProperty(\"Content-Type\",\"text/xml\");\n            MyConn.setRequestProperty(\"SOAPAction\", \"\\\"http://LRIT.svc/GetPositions\\\"\");\n            //MyConn.setRequestProperty(\"Authorization\", \"Basic \" + Base64.getEncoder().encodeToString((userName + \":\" + password).getBytes()));\n        \n        \n            String payload = \"<?xml version=\\\"1.0\\\" encoding=\\\"utf-8\\\"?>\" +\n            \t\"<soap:Envelope xmlns:xsi=\\\"http://www.w3.org/2001/XMLSchema-instance\\\" xmlns:xsd=\\\"http://www.w3.org/2001/XMLSchema\\\" xmlns:soap=\\\"http://schemas.xmlsoap.org/soap/envelope/\\\">\" +\n            \t\"<soap:Body>\" +\n            \t\"<GetPositions xmlns=\\\"http://LRIT.svc/\\\">\" +\n            \t\"<from>\" + startDate + \"</from>\" +\n            \t\"<to>\" + endDate + \"</to>\" +\n            \t\"</GetPositions>\" +\n            \t\"</soap:Body>\" +\n            \t\"</soap:Envelope>\";\n        \n            byte[] out = payload.getBytes(StandardCharsets.UTF_8);\n            OutputStream stream = MyConn.getOutputStream();\n            stream.write(out);\n        \n            int responseCode = MyConn.getResponseCode();\n            //System.out.println(\"GET Response Code :: \" + responseCode);\n        \n            if (responseCode == MyConn.HTTP_OK) {\n            \t// Create a reader with the input stream reader.\n            \tBufferedReader in = new BufferedReader(new InputStreamReader(\n            \t\tMyConn.getInputStream()));\n            \tString inputLine;\n        \n            \t// Create a string buffer\n            \tStringBuffer response = new StringBuffer();\n        \n            \t// Write each of the input line\n            \twhile ((inputLine = in.readLine()) != null) {\n            \t\tresponse.append(inputLine);\n            \t}\n            \tin.close();\n        \n            \tString xml = response.toString();\n            \tbyte[] encoded = xml.getBytes();\n            \tJSONObject xmlJSONObj = XML.toJSONObject(new String(encoded));\n            \tString json = xmlJSONObj.toString(4);\n        \n            \tJSONObject envelope = xmlJSONObj.getJSONObject(\"soap:Envelope\");\n            \tJSONObject body = envelope.getJSONObject(\"soap:Body\");\n        \n            \tJSONObject result = new JSONObject();\n            \tresult.put(\"Body\", body);\n        \n            \texchange.getIn().setBody(result.toString(4));\n            } else {\n            \tSystem.out.println(\"Error found !!!\");\n            }\n        \n        }\n    }).id('process-01')\n\nfrom('direct://mmdis get vessel').routeId('route-5')\n    .process(new Processor() {\n        @Override\n        void process(Exchange exchange) throws Exception {\n            Object imo = exchange.getIn().getHeader(\"imo\");\n            System.out.println(\"imo :: \" + imo);\n            exchange.getIn().setBody(\"\");\n        \n            URL url = new URL(\"http://mdm.enav.my:50837/api/MMDIS/vessel/\" + imo);\n        \n            HttpURLConnection MyConn = (HttpURLConnection) url.openConnection();\n            // Set the request method to \"GET\"\n            MyConn.setRequestMethod(\"GET\");\n            MyConn.setDoOutput(true);\n            MyConn.setRequestProperty(\"Content-Type\",\"application/json\");\n            //MyConn.setRequestProperty(\"Authorization\", \"Basic \" + Base64.getEncoder().encodeToString((userName + \":\" + password).getBytes()));\n        \n        \n            //String payload = \"{\" +\n            //\t\t\t\t\t\t\t\t\t\"\\\"vesselId\\\": \" + \"\\\"\\\",\" +\n            //\t\t\t\t\t\t\t\t\t\"\\\"vesselName\\\": \" + \"\\\"\\\",\" +\n            //\t\t\t\t\t\t\t\t\t\"\\\"officialNumber\\\": \" + \"\\\"\\\",\" +\n            //\t\t\t\t\t\t\t\t\t\"\\\"imoNumber\\\": \" + \"\\\"\" + imo +  \"\\\"\" +\n            //\t\t\t\t\t\t\t\t\t\"}\";\n        \n            //byte[] out = payload.getBytes(StandardCharsets.UTF_8);\n            //OutputStream stream = MyConn.getOutputStream();\n            //stream.write(out);\n        \n            int responseCode = MyConn.getResponseCode();\n            System.out.println(\"GET Response Code :: \" + responseCode);\n        \n            if (responseCode == MyConn.HTTP_OK) {\n            \t// Create a reader with the input stream reader.\n            \tBufferedReader in = new BufferedReader(new InputStreamReader(\n            \t\tMyConn.getInputStream()));\n            \tString inputLine;\n        \n            \t// Create a string buffer\n            \tStringBuffer response = new StringBuffer();\n        \n            \t// Write each of the input line\n            \twhile ((inputLine = in.readLine()) != null) {\n            \t\tresponse.append(inputLine);\n            \t}\n            \tin.close();\n        \n            \tString resp = response.toString();\n        \n            \texchange.getIn().setBody(resp);\n            } else {\n            \t// Create a reader with the input stream reader.\n            \tBufferedReader in = new BufferedReader(new InputStreamReader(\n            \t\tMyConn.getInputStream()));\n            \tString inputLine;\n        \n            \t// Create a string buffer\n            \tStringBuffer response = new StringBuffer();\n        \n            \t// Write each of the input line\n            \twhile ((inputLine = in.readLine()) != null) {\n            \t\tresponse.append(inputLine);\n            \t}\n            \tin.close();\n        \n            \tString resp = response.toString();\n        \n            \texchange.getIn().setBody(resp);\n            }\n        \n        }\n    }).id('process-02')"
+    name: "eip-rest-gateway.groovy"
+  - content: |-
+      beans {
+          enavSqlServer(org.apache.commons.dbcp2.BasicDataSource) {
+              driverClassName = 'com.microsoft.sqlserver.jdbc.SQLServerDriver'
+              url = 'jdbc:sqlserver://117.53.152.155;port=1433;database=VTS;Uid=sa;Pwd=Enav-DB123Sql456!!!;trustServerCertificate=true;'
+              username = 'sa'
+              password = 'Enav-DB123Sql456!!!'
+          }
+      }
+    name: "enav_sql_server.groovy"
+  traits:
+    ingress:
+      configuration:
+        enabled: true
+        host: "eip-rest-gw.pinc.my"
+        auto: true
+    jolokia:
+      configuration:
+        enabled: true
+    logging:
+      configuration:
+        enabled: true
+        level: "DEBUG"
+    owner:
+      configuration:
+        enabled: true
+        targetLabels:
+        - "jetic.io/data.analyzer"
+        - "jetic.io/deployment.uuid"
+        - "jetic.io/integration.name"
+        - "jetic.io/integration.revision"
+        - "jetic.io/integration.uuid"
+        - "jetic.io/integration.version"
+        - "jetic.io/log.level"
+        - "jetic.io/open.api.host"
+        - "jetic.io/profile.name"
+        - "jetic.io/profile.uuid"
+    service:
+      configuration:
+        auto: true
+        enabled: true
+        nodePort: false
